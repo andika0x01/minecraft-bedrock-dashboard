@@ -1,0 +1,42 @@
+---
+import DashboardShell from "../components/DashboardShell.astro";
+---
+
+<DashboardShell title="Ringkasan | Bedrock Dashboard" activePath="/dashboard">
+  <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+    <a href="/dashboard/server" class="group rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition hover:border-[#F5F0E8]">
+      <p class="text-xs uppercase tracking-[0.2em] text-[#666666]">Aksi Cepat</p>
+      <h2 class="mt-2 text-xl font-bold text-[#FFFFFF]">Kontrol Server</h2>
+      <p class="mt-2 text-sm text-[#A0A0A0]">Start, stop, restart, kirim command, dan pantau log terbaru.</p>
+      <span class="mt-4 inline-flex rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A]">Buka Modul</span>
+    </a>
+
+    <a href="/dashboard/settings" class="group rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition hover:border-[#F5F0E8]">
+      <p class="text-xs uppercase tracking-[0.2em] text-[#666666]">Konfigurasi</p>
+      <h2 class="mt-2 text-xl font-bold text-[#FFFFFF]">Pengaturan Server</h2>
+      <p class="mt-2 text-sm text-[#A0A0A0]">Atur game mode, difficulty, player limit, port, dan opsi lainnya.</p>
+      <span class="mt-4 inline-flex rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A]">Buka Modul</span>
+    </a>
+
+    <a href="/dashboard/worlds" class="group rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition hover:border-[#F5F0E8]">
+      <p class="text-xs uppercase tracking-[0.2em] text-[#666666]">Dunia</p>
+      <h2 class="mt-2 text-xl font-bold text-[#FFFFFF]">Kelola World</h2>
+      <p class="mt-2 text-sm text-[#A0A0A0]">Upload file .mcworld dan pilih world aktif dengan sekali klik.</p>
+      <span class="mt-4 inline-flex rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A]">Buka Modul</span>
+    </a>
+
+    <a href="/dashboard/addons" class="group rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition hover:border-[#F5F0E8]">
+      <p class="text-xs uppercase tracking-[0.2em] text-[#666666]">Ekstensi</p>
+      <h2 class="mt-2 text-xl font-bold text-[#FFFFFF]">Kelola Addon</h2>
+      <p class="mt-2 text-sm text-[#A0A0A0]">Upload .mcpack/.mcaddon dan aktifkan addon untuk world aktif.</p>
+      <span class="mt-4 inline-flex rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A]">Buka Modul</span>
+    </a>
+
+    <a href="/dashboard/players" class="group rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 transition hover:border-[#F5F0E8]">
+      <p class="text-xs uppercase tracking-[0.2em] text-[#666666]">Statistik</p>
+      <h2 class="mt-2 text-xl font-bold text-[#FFFFFF]">Data Players</h2>
+      <p class="mt-2 text-sm text-[#A0A0A0]">Lihat semua player yang pernah join, urut berdasarkan durasi main terbanyak.</p>
+      <span class="mt-4 inline-flex rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A]">Buka Modul</span>
+    </a>
+  </section>
+</DashboardShell>

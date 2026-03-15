@@ -1,0 +1,179 @@
+---
+import DashboardShell from "../../components/DashboardShell.astro";
+---
+
+<DashboardShell title="Pengaturan Server | Bedrock Dashboard" activePath="/dashboard/settings">
+  <section class="space-y-6">
+    <div id="feedback" class="hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm"></div>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-[#FFFFFF]">Pengaturan Server</h2>
+          <p class="mt-1 text-sm text-[#A0A0A0]">Ubah konfigurasi server dengan form yang lebih fokus.</p>
+        </div>
+        <button id="save-settings" class="rounded-xl bg-[#F5F0E8] px-4 py-2 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]">Simpan Pengaturan</button>
+      </div>
+
+      <form id="settings-form" class="grid grid-cols-1 gap-4 sm:grid-cols-2"></form>
+    </article>
+  </section>
+
+  <script>
+    const feedback = document.getElementById("feedback");
+    const settingsForm = document.getElementById("settings-form");
+
+    type FeedbackType = "info" | "success" | "error";
+
+    const settingMeta = [
+      ["server-name", "Nama Server", "text"],
+      ["gamemode", "Game Mode", "text"],
+      ["difficulty", "Difficulty", "text"],
+      ["allow-cheats", "Allow Cheats", "text"],
+      ["max-players", "Max Players", "number"],
+      ["online-mode", "Online Mode", "text"],
+      ["allow-list", "Allow List", "text"],
+      ["server-port", "Port IPv4", "number"],
+      ["server-portv6", "Port IPv6", "number"],
+      ["enable-lan-visibility", "LAN Visibility", "text"],
+      ["view-distance", "View Distance", "number"],
+      ["tick-distance", "Tick Distance", "number"],
+      ["player-idle-timeout", "Idle Timeout", "number"],
+      ["max-threads", "Max Threads", "number"],
+      ["level-name", "Level Name", "text"],
+      ["level-seed", "Level Seed", "text"],
+      ["default-player-permission-level", "Default Permission", "text"],
+      ["texturepack-required", "Texturepack Required", "text"],
+    ];
+
+    const booleanKeys = new Set(["allow-cheats", "online-mode", "allow-list", "enable-lan-visibility", "texturepack-required"]);
+
+    function showFeedback(message: string, type: FeedbackType = "info") {
+      if (!(feedback instanceof HTMLElement)) {
+        return;
+      }
+      feedback.classList.remove("hidden", "text-[#A0A0A0]", "text-[#ff9e9e]", "text-[#F5F0E8]");
+      feedback.classList.add(type === "error" ? "text-[#ff9e9e]" : type === "success" ? "text-[#F5F0E8]" : "text-[#A0A0A0]");
+      feedback.textContent = message;
+    }
+
+    async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+      const response = await fetch(url, options);
+      const data = (await response.json()) as { message?: string } & T;
+      if (!response.ok) {
+        throw new Error(data.message || "Request gagal");
+      }
+      return data;
+    }
+
+    function createField(key: string, label: string, type: string, value: string) {
+      const wrapper = document.createElement("label");
+      wrapper.className = "block";
+
+      const title = document.createElement("span");
+      title.className = "mb-2 block text-xs font-medium uppercase tracking-[0.08em] text-[#666666]";
+      title.textContent = label;
+
+      const input = document.createElement("input");
+      input.name = key;
+      input.type = type;
+      input.value = value ?? "";
+      input.className = "w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-3 text-sm text-[#FFFFFF] outline-none transition focus:border-[#F5F0E8]";
+
+      wrapper.appendChild(title);
+      wrapper.appendChild(input);
+      return wrapper;
+    }
+
+    function createBooleanField(key: string, label: string, value: string) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "block";
+
+      const title = document.createElement("span");
+      title.className = "mb-2 block text-xs font-medium uppercase tracking-[0.08em] text-[#666666]";
+      title.textContent = label;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "inline-flex w-full items-center justify-between rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-3 text-sm text-[#FFFFFF]";
+
+      const badge = document.createElement("span");
+      badge.className = "rounded-full px-3 py-1 text-xs font-semibold";
+
+      const hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = key;
+
+      const syncState = (current: "true" | "false") => {
+        const enabled = current === "true";
+        hidden.value = enabled ? "true" : "false";
+        button.setAttribute("aria-pressed", enabled ? "true" : "false");
+        button.dataset.value = enabled ? "true" : "false";
+        badge.textContent = enabled ? "ON" : "OFF";
+        badge.className = enabled
+          ? "rounded-full bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A]"
+          : "rounded-full bg-[#2A2A2A] px-3 py-1 text-xs font-semibold text-[#A0A0A0]";
+      };
+
+      syncState(value === "true" ? "true" : "false");
+
+      button.addEventListener("click", () => {
+        const next = button.dataset.value === "true" ? "false" : "true";
+        syncState(next);
+      });
+
+      const left = document.createElement("span");
+      left.textContent = "Klik untuk ubah";
+      left.className = "text-sm text-[#A0A0A0]";
+
+      button.appendChild(left);
+      button.appendChild(badge);
+      wrapper.appendChild(title);
+      wrapper.appendChild(button);
+      wrapper.appendChild(hidden);
+      return wrapper;
+    }
+
+    async function loadSettings() {
+      const data = await api<{ settings: Record<string, string> }>("/api/settings");
+      if (!(settingsForm instanceof HTMLElement)) {
+        return;
+      }
+
+      settingsForm.innerHTML = "";
+      for (const [key, label, type] of settingMeta) {
+        const value = data.settings[key] ?? "";
+        if (booleanKeys.has(key)) {
+          settingsForm.appendChild(createBooleanField(key, label, value));
+        } else {
+          settingsForm.appendChild(createField(key, label, type, value));
+        }
+      }
+    }
+
+    document.getElementById("save-settings")?.addEventListener("click", async () => {
+      if (!(settingsForm instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const formData = new FormData(settingsForm);
+      const payload = Object.fromEntries([...formData.entries()].map(([key, value]) => [key, String(value).trim()]));
+
+      try {
+        showFeedback("Menyimpan pengaturan server...");
+        await api<{ ok: boolean }>("/api/settings", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        showFeedback("Pengaturan tersimpan. Restart server bila perubahan belum terlihat.", "success");
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    loadSettings().catch((error) => {
+      showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+    });
+  </script>
+</DashboardShell>

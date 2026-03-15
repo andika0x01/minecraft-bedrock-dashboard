@@ -1,0 +1,86 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Login Admin | Bedrock Dashboard">
+  <main class="flex min-h-screen items-center justify-center px-4 py-10">
+    <section class="w-full max-w-md rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-6 shadow-[0_0_40px_rgba(255,255,255,0.05)] sm:p-8">
+      <div class="mb-8">
+        <p class="mb-2 inline-flex rounded-full border border-[#2A2A2A] bg-[#111111] px-3 py-1 text-xs font-medium text-[#A0A0A0]">Akses Admin</p>
+        <h1 class="text-2xl font-bold text-[#FFFFFF]">Minecraft Bedrock Dashboard</h1>
+        <p class="mt-2 text-sm text-[#A0A0A0]">Masuk untuk mulai mengelola server, world, dan addon.</p>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label for="username" class="mb-2 block text-sm font-medium text-[#F5F5F5]">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            required
+            class="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-sm text-[#FFFFFF] outline-none transition focus:border-[#F5F0E8]"
+          />
+        </div>
+
+        <div>
+          <label for="password" class="mb-2 block text-sm font-medium text-[#F5F5F5]">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            class="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-sm text-[#FFFFFF] outline-none transition focus:border-[#F5F0E8]"
+          />
+        </div>
+
+        <button type="submit" class="w-full rounded-xl bg-[#F5F0E8] px-4 py-3 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]"> Login </button>
+      </form>
+
+      <p id="login-message" class="mt-4 min-h-6 text-sm text-[#A0A0A0]"></p>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("login-form");
+    const message = document.getElementById("login-message");
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!(form instanceof HTMLFormElement) || !(message instanceof HTMLElement)) {
+        return;
+      }
+
+      message.textContent = "Memproses login...";
+      message.className = "mt-4 min-h-6 text-sm text-[#A0A0A0]";
+
+      const formData = new FormData(form);
+      const payload = {
+        username: String(formData.get("username") ?? "").trim(),
+        password: String(formData.get("password") ?? ""),
+      };
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        message.textContent = data.message ?? "Login gagal.";
+        message.className = "mt-4 min-h-6 text-sm text-[#ff8f8f]";
+        return;
+      }
+
+      message.textContent = "Login berhasil, mengalihkan...";
+      message.className = "mt-4 min-h-6 text-sm text-[#F5F0E8]";
+      window.location.href = "/dashboard";
+    });
+  </script>
+</Layout>

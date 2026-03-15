@@ -1,0 +1,97 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+type Props = {
+  title: string;
+  activePath: string;
+};
+
+const { title, activePath } = Astro.props;
+
+const navItems = [
+  { href: "/dashboard", label: "Ringkasan" },
+  { href: "/dashboard/server", label: "Kontrol Server" },
+  { href: "/dashboard/settings", label: "Pengaturan" },
+  { href: "/dashboard/worlds", label: "World" },
+  { href: "/dashboard/addons", label: "Addon" },
+  { href: "/dashboard/players", label: "Players" },
+];
+---
+
+<Layout title={title}>
+  <main class="min-h-screen bg-[#0A0A0A]">
+    <header class="sticky top-0 z-20 border-b border-[#2A2A2A] bg-[#111111]/95 backdrop-blur">
+      <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.2em] text-[#666666]">Official Bedrock Server</p>
+            <h1 class="text-lg font-bold text-[#FFFFFF] sm:text-xl">Minecraft Bedrock Dashboard</h1>
+          </div>
+          <div class="flex items-center gap-2">
+            <div id="global-server-badge" class="rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1 text-xs font-medium text-[#A0A0A0]">Status: memuat...</div>
+            <button
+              id="global-logout-btn"
+              class="rounded-xl border border-[#444444] bg-[#2A2A2A] px-3 py-2 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444] sm:text-sm">Logout</button
+            >
+          </div>
+        </div>
+
+        <nav class="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <ul class="flex min-w-max gap-2">
+            {
+              navItems.map((item) => (
+                <li>
+                  <a
+                    href={item.href}
+                    class:list={[
+                      "inline-flex rounded-lg px-3 py-2 text-sm font-semibold transition",
+                      activePath === item.href ? "bg-[#F5F0E8] text-[#0A0A0A]" : "border border-[#2A2A2A] bg-[#1A1A1A] text-[#F5F5F5] hover:bg-[#2A2A2A]",
+                    ]}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <slot />
+    </div>
+  </main>
+
+  <script>
+    const badge = document.getElementById("global-server-badge");
+
+    async function refreshServerStatus() {
+      try {
+        const response = await fetch("/api/server/status");
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (!(badge instanceof HTMLElement)) {
+          return;
+        }
+        if (data.status?.running) {
+          badge.textContent = `Status: Running (PID ${data.status.pid ?? "-"})`;
+          badge.className = "rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1 text-xs font-medium text-[#F5F0E8]";
+          return;
+        }
+        badge.textContent = "Status: Stopped";
+        badge.className = "rounded-full border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1 text-xs font-medium text-[#A0A0A0]";
+      } catch {}
+    }
+
+    document.getElementById("global-logout-btn")?.addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+
+    refreshServerStatus();
+    setInterval(refreshServerStatus, 5000);
+  </script>
+</Layout>

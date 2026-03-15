@@ -1,0 +1,482 @@
+---
+import DashboardShell from "../../components/DashboardShell.astro";
+---
+
+<DashboardShell title="Kelola World | Bedrock Dashboard" activePath="/dashboard/worlds">
+  <section class="space-y-6">
+    <div id="feedback" class="hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm"></div>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h2 class="text-lg font-semibold text-[#FFFFFF]">Upload World</h2>
+      <p class="mt-1 text-sm text-[#A0A0A0]">Format yang didukung: .mcworld</p>
+
+      <form id="world-upload-form" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input
+          id="world-file"
+          type="file"
+          accept=".mcworld"
+          class="w-full min-w-0 flex-1 rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-3 text-sm text-[#A0A0A0] file:mr-3 file:rounded-lg file:border-0 file:bg-[#2A2A2A] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#F5F5F5]"
+        />
+        <button
+          type="submit"
+          class="h-12 shrink-0 whitespace-nowrap rounded-xl bg-[#F5F0E8] px-5 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0] sm:min-w-[9.5rem]"
+          >Upload World</button
+        >
+      </form>
+    </article>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-[#666666]">Daftar World</h3>
+      <div class="mt-4 overflow-x-auto rounded-xl border border-[#2A2A2A]">
+        <table class="min-w-full divide-y divide-[#2A2A2A] text-left text-sm">
+          <thead class="bg-[#111111] text-[#A0A0A0]">
+            <tr>
+              <th class="px-4 py-3">Nama World</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="world-table-body" class="divide-y divide-[#2A2A2A] bg-[#0A0A0A]"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <div id="world-settings-modal" class="fixed inset-0 z-50 hidden items-end justify-center bg-[#0A0A0A]/80 p-0 sm:items-center sm:p-4">
+    <div class="h-[92vh] w-full rounded-t-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl sm:p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 id="world-settings-title" class="text-base font-semibold text-[#FFFFFF]">Settings World</h3>
+          <p class="mt-1 text-xs text-[#A0A0A0]">Edit JSON settings world lalu simpan.</p>
+        </div>
+        <button
+          id="world-settings-close"
+          type="button"
+          class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1.5 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Tutup</button
+        >
+      </div>
+
+      <p id="world-settings-error" class="mt-3 hidden rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-xs text-[#ff9e9e]"></p>
+
+      <div id="world-settings-editor" class="mt-3 h-[64vh] w-full overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] text-xs leading-6 text-[#F5F5F5] sm:h-[56vh]">
+      </div>
+
+      <div class="mt-3 flex flex-wrap justify-end gap-2">
+        <button
+          id="world-settings-format"
+          type="button"
+          class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-2 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Format JSON</button
+        >
+        <button
+          id="world-settings-cancel"
+          type="button"
+          class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-2 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Batal</button
+        >
+        <button id="world-settings-save" type="button" class="rounded-lg bg-[#F5F0E8] px-3 py-2 text-xs font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import { basicSetup } from "codemirror";
+    import { EditorState } from "@codemirror/state";
+    import { indentWithTab } from "@codemirror/commands";
+    import { json } from "@codemirror/lang-json";
+    import { EditorView, keymap } from "@codemirror/view";
+
+    const feedback = document.getElementById("feedback");
+    const worldTableBody = document.getElementById("world-table-body");
+    const worldSettingsModal = document.getElementById("world-settings-modal");
+    const worldSettingsTitle = document.getElementById("world-settings-title");
+    const worldSettingsEditor = document.getElementById("world-settings-editor");
+    const worldSettingsError = document.getElementById("world-settings-error");
+    const worldSettingsSave = document.getElementById("world-settings-save");
+    const worldSettingsFormat = document.getElementById("world-settings-format");
+    const worldSettingsCancel = document.getElementById("world-settings-cancel");
+    const worldSettingsClose = document.getElementById("world-settings-close");
+
+    type FeedbackType = "info" | "success" | "error";
+    type WorldItem = { name: string; active: boolean };
+    type SchemaValidation = { errors: string[]; warnings: string[] };
+
+    let editingWorldName = "";
+    let savingWorldSettings = false;
+    let worldEditorView: EditorView | null = null;
+
+    const worldEditorTheme = EditorView.theme({
+      "&": { height: "100%", backgroundColor: "#0A0A0A", color: "#F5F5F5" },
+      ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" },
+      ".cm-gutters": { backgroundColor: "#111111", color: "#666666", borderRight: "1px solid #2A2A2A" },
+      ".cm-activeLineGutter": { backgroundColor: "#1A1A1A", color: "#A0A0A0" },
+      ".cm-activeLine": { backgroundColor: "#111111" },
+      ".cm-content": { caretColor: "#F5F0E8", padding: "12px" },
+      ".cm-cursor": { borderLeftColor: "#F5F0E8" },
+      ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": { backgroundColor: "#2A2A2A" },
+      ".cm-line": { lineHeight: "1.6" },
+    });
+
+    function showFeedback(message: string, type: FeedbackType = "info") {
+      if (!(feedback instanceof HTMLElement)) {
+        return;
+      }
+      feedback.classList.remove("hidden", "text-[#A0A0A0]", "text-[#ff9e9e]", "text-[#F5F0E8]");
+      feedback.classList.add(type === "error" ? "text-[#ff9e9e]" : type === "success" ? "text-[#F5F0E8]" : "text-[#A0A0A0]");
+      feedback.textContent = message;
+    }
+
+    async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+      const response = await fetch(url, options);
+      const data = (await response.json()) as { message?: string } & T;
+      if (!response.ok) {
+        throw new Error(data.message || "Request gagal");
+      }
+      return data;
+    }
+
+    function ensureWorldEditor() {
+      if (worldEditorView || !(worldSettingsEditor instanceof HTMLElement)) {
+        return;
+      }
+
+      worldEditorView = new EditorView({
+        state: EditorState.create({
+          doc: "{}",
+          extensions: [basicSetup, json(), keymap.of([indentWithTab]), worldEditorTheme],
+        }),
+        parent: worldSettingsEditor,
+      });
+    }
+
+    function setWorldEditorValue(value: string) {
+      if (!worldEditorView) {
+        return;
+      }
+      worldEditorView.dispatch({
+        changes: { from: 0, to: worldEditorView.state.doc.length, insert: value },
+      });
+    }
+
+    function getWorldEditorValue() {
+      if (!worldEditorView) {
+        return "";
+      }
+      return worldEditorView.state.doc.toString();
+    }
+
+    function validateWorldSettingsSchema(value: unknown): SchemaValidation {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        errors.push("Root JSON harus berupa object, bukan array atau primitive.");
+        return { errors, warnings };
+      }
+
+      const obj = value as Record<string, unknown>;
+
+      if (obj.difficulty !== undefined && !["peaceful", "easy", "normal", "hard"].includes(String(obj.difficulty))) {
+        errors.push("difficulty harus salah satu: peaceful, easy, normal, hard.");
+      }
+
+      if (obj.gameMode !== undefined && !["survival", "creative", "adventure", "spectator"].includes(String(obj.gameMode))) {
+        errors.push("gameMode harus salah satu: survival, creative, adventure, spectator.");
+      }
+
+      if (obj.maxPlayers !== undefined) {
+        const valueNumber = Number(obj.maxPlayers);
+        if (!Number.isInteger(valueNumber) || valueNumber < 1 || valueNumber > 200) {
+          errors.push("maxPlayers harus integer antara 1 sampai 200.");
+        }
+      }
+
+      for (const key of ["pvp", "allowCheats", "keepInventory", "enableNether", "friendlyFire"]) {
+        if (obj[key] !== undefined && typeof obj[key] !== "boolean") {
+          errors.push(`${key} harus bernilai boolean (true/false).`);
+        }
+      }
+
+      if (obj.seed !== undefined && typeof obj.seed !== "string" && typeof obj.seed !== "number") {
+        errors.push("seed harus string atau number.");
+      }
+
+      if (obj.motd !== undefined && (typeof obj.motd !== "string" || obj.motd.length > 120)) {
+        errors.push("motd harus string dengan panjang maksimal 120 karakter.");
+      }
+
+      if (obj.spawnProtection !== undefined) {
+        const valueNumber = Number(obj.spawnProtection);
+        if (!Number.isInteger(valueNumber) || valueNumber < 0 || valueNumber > 512) {
+          errors.push("spawnProtection harus integer antara 0 sampai 512.");
+        }
+      }
+
+      if (obj.autosaveIntervalSeconds !== undefined) {
+        const valueNumber = Number(obj.autosaveIntervalSeconds);
+        if (!Number.isInteger(valueNumber) || valueNumber < 10 || valueNumber > 3600) {
+          errors.push("autosaveIntervalSeconds harus integer antara 10 sampai 3600.");
+        }
+      }
+
+      if (!Object.keys(obj).length) {
+        warnings.push("Settings world masih kosong.");
+      }
+
+      return { errors, warnings };
+    }
+
+    async function openWorldSettings(world: WorldItem) {
+      const current = await api<{ settings: unknown }>(`/api/worlds/settings?worldName=${encodeURIComponent(world.name)}`);
+      if (!(worldSettingsModal instanceof HTMLElement) || !(worldSettingsEditor instanceof HTMLElement) || !(worldSettingsTitle instanceof HTMLElement)) {
+        return;
+      }
+
+      ensureWorldEditor();
+      editingWorldName = world.name;
+      worldSettingsTitle.textContent = `Settings World: ${world.name}`;
+      setWorldEditorValue(JSON.stringify(current.settings, null, 2));
+      worldSettingsModal.classList.remove("hidden");
+      worldSettingsModal.classList.add("flex");
+      worldEditorView?.focus();
+      hideWorldSettingsError();
+    }
+
+    function hideWorldSettingsEditor() {
+      if (!(worldSettingsModal instanceof HTMLElement)) {
+        return;
+      }
+      worldSettingsModal.classList.add("hidden");
+      worldSettingsModal.classList.remove("flex");
+      editingWorldName = "";
+      hideWorldSettingsError();
+    }
+
+    function showWorldSettingsError(message: string) {
+      if (!(worldSettingsError instanceof HTMLElement)) {
+        return;
+      }
+      worldSettingsError.textContent = message;
+      worldSettingsError.classList.remove("hidden");
+    }
+
+    function hideWorldSettingsError() {
+      if (!(worldSettingsError instanceof HTMLElement)) {
+        return;
+      }
+      worldSettingsError.textContent = "";
+      worldSettingsError.classList.add("hidden");
+    }
+
+    async function saveWorldSettings() {
+      if (savingWorldSettings) {
+        return;
+      }
+      if (!editingWorldName || !(worldSettingsSave instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(getWorldEditorValue());
+      } catch {
+        showWorldSettingsError("JSON tidak valid. Periksa kembali formatnya.");
+        return;
+      }
+
+      const validation = validateWorldSettingsSchema(parsed);
+      if (validation.errors.length > 0) {
+        showWorldSettingsError(validation.errors.join("\n"));
+        return;
+      }
+      if (validation.warnings.length > 0) {
+        showFeedback(validation.warnings.join(" "), "info");
+      }
+
+      try {
+        savingWorldSettings = true;
+        worldSettingsSave.disabled = true;
+        worldSettingsSave.textContent = "Menyimpan...";
+        hideWorldSettingsError();
+        await api<{ ok: boolean }>("/api/worlds/settings", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ worldName: editingWorldName, settings: parsed }),
+        });
+        hideWorldSettingsEditor();
+      } finally {
+        savingWorldSettings = false;
+        worldSettingsSave.disabled = false;
+        worldSettingsSave.textContent = "Simpan";
+      }
+    }
+
+    function formatWorldSettingsJson() {
+      if (!worldEditorView) {
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(getWorldEditorValue());
+        setWorldEditorValue(JSON.stringify(parsed, null, 2));
+        hideWorldSettingsError();
+      } catch {
+        showWorldSettingsError("JSON tidak valid. Tidak bisa diformat.");
+      }
+    }
+
+    function renderWorlds(worlds: WorldItem[]) {
+      if (!(worldTableBody instanceof HTMLElement)) {
+        return;
+      }
+      worldTableBody.innerHTML = "";
+
+      if (!worlds.length) {
+        worldTableBody.innerHTML = '<tr><td colspan="3" class="px-4 py-4 text-center text-[#666666]">Belum ada world.</td></tr>';
+        return;
+      }
+
+      for (const world of worlds) {
+        const row = document.createElement("tr");
+        row.className = "text-[#F5F5F5]";
+
+        const activateDisabled = world.active ? "disabled" : "";
+        const activateClass = world.active
+          ? "rounded-lg border border-[#2A2A2A] bg-[#1A1A1A] px-3 py-1 text-xs font-semibold text-[#666666]"
+          : "rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]";
+
+        row.innerHTML = `
+          <td class="px-4 py-3">${world.name}</td>
+          <td class="px-4 py-3">${world.active ? "Aktif" : "Nonaktif"}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <button data-action="activate" data-world="${world.name}" ${activateDisabled} class="${activateClass}">${world.active ? "Sedang Aktif" : "Pilih Jadi Aktif"}</button>
+              <button data-action="settings" data-world="${world.name}" class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Settings</button>
+              <button data-action="delete" data-world="${world.name}" class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Hapus</button>
+            </div>
+          </td>
+        `;
+
+        row.querySelector('[data-action="activate"]')?.addEventListener("click", async () => {
+          try {
+            showFeedback("Mengaktifkan world...");
+            const data = await api<{ worlds: WorldItem[] }>("/api/worlds", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ worldName: world.name }),
+            });
+            renderWorlds(data.worlds);
+            showFeedback("World aktif berhasil diubah.", "success");
+          } catch (error) {
+            showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+          }
+        });
+
+        row.querySelector('[data-action="delete"]')?.addEventListener("click", async () => {
+          if (!window.confirm(`Hapus world ${world.name}?`)) {
+            return;
+          }
+
+          try {
+            showFeedback("Menghapus world...");
+            const data = await api<{ worlds: WorldItem[] }>("/api/worlds", {
+              method: "DELETE",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ worldName: world.name }),
+            });
+            renderWorlds(data.worlds);
+            showFeedback("World berhasil dihapus.", "success");
+          } catch (error) {
+            showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+          }
+        });
+
+        row.querySelector('[data-action="settings"]')?.addEventListener("click", async () => {
+          try {
+            showFeedback("Membuka settings world...");
+            await openWorldSettings(world);
+            showFeedback("Editor settings world dibuka.", "success");
+          } catch (error) {
+            showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+          }
+        });
+
+        worldTableBody.appendChild(row);
+      }
+    }
+
+    async function loadWorlds() {
+      const data = await api<{ worlds: WorldItem[] }>("/api/worlds");
+      renderWorlds(data.worlds);
+    }
+
+    document.getElementById("world-upload-form")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("world-file");
+      if (!(input instanceof HTMLInputElement) || !input.files || !input.files[0]) {
+        showFeedback("Pilih file .mcworld terlebih dahulu.", "error");
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", input.files[0]);
+
+      try {
+        showFeedback("Mengupload world...");
+        await api<{ ok: boolean }>("/api/worlds", {
+          method: "POST",
+          body: form,
+        });
+        input.value = "";
+        await loadWorlds();
+        showFeedback("Upload world berhasil.", "success");
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    worldSettingsSave?.addEventListener("click", async () => {
+      try {
+        showFeedback("Menyimpan settings world...");
+        await saveWorldSettings();
+        if (!editingWorldName) {
+          showFeedback("Settings world berhasil disimpan.", "success");
+        }
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    worldSettingsFormat?.addEventListener("click", () => {
+      formatWorldSettingsJson();
+    });
+
+    worldSettingsCancel?.addEventListener("click", () => {
+      hideWorldSettingsEditor();
+    });
+
+    worldSettingsClose?.addEventListener("click", () => {
+      hideWorldSettingsEditor();
+    });
+
+    worldSettingsModal?.addEventListener("click", (event) => {
+      if (event.target === worldSettingsModal) {
+        hideWorldSettingsEditor();
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && worldSettingsModal instanceof HTMLElement && !worldSettingsModal.classList.contains("hidden")) {
+        hideWorldSettingsEditor();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        if (worldSettingsModal instanceof HTMLElement && !worldSettingsModal.classList.contains("hidden")) {
+          event.preventDefault();
+          worldSettingsSave instanceof HTMLElement && worldSettingsSave.click();
+        }
+      }
+    });
+
+    loadWorlds().catch((error) => {
+      showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+    });
+  </script>
+</DashboardShell>

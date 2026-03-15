@@ -1,0 +1,123 @@
+---
+import DashboardShell from "../../components/DashboardShell.astro";
+---
+
+<DashboardShell title="Players | Bedrock Dashboard" activePath="/dashboard/players">
+  <section class="space-y-6">
+    <div id="feedback" class="hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm"></div>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-[#FFFFFF]">Riwayat Players</h2>
+          <p class="mt-1 text-sm text-[#A0A0A0]">Urut dari durasi main terbanyak.</p>
+        </div>
+        <button id="refresh-players" class="rounded-xl border border-[#444444] bg-[#2A2A2A] px-3 py-2 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444] sm:text-sm"
+          >Refresh</button
+        >
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border border-[#2A2A2A]">
+        <table class="min-w-full divide-y divide-[#2A2A2A] text-left text-sm">
+          <thead class="bg-[#111111] text-[#A0A0A0]">
+            <tr>
+              <th class="px-4 py-3">Player</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Durasi (Jam)</th>
+              <th class="px-4 py-3">Durasi (Menit)</th>
+              <th class="px-4 py-3">Last Seen</th>
+            </tr>
+          </thead>
+          <tbody id="players-table-body" class="divide-y divide-[#2A2A2A] bg-[#0A0A0A] text-[#F5F5F5]"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <script>
+    const feedback = document.getElementById("feedback");
+    const playersTableBody = document.getElementById("players-table-body");
+
+    type FeedbackType = "info" | "success" | "error";
+    type PlayerItem = {
+      id: string;
+      name: string;
+      totalDurationMs: number;
+      totalDurationMinutes: number;
+      totalDurationHours: number;
+      online: boolean;
+      lastSeenMs: number | null;
+    };
+
+    function showFeedback(message: string, type: FeedbackType = "info") {
+      if (!(feedback instanceof HTMLElement)) {
+        return;
+      }
+      feedback.classList.remove("hidden", "text-[#A0A0A0]", "text-[#ff9e9e]", "text-[#F5F0E8]");
+      feedback.classList.add(type === "error" ? "text-[#ff9e9e]" : type === "success" ? "text-[#F5F0E8]" : "text-[#A0A0A0]");
+      feedback.textContent = message;
+    }
+
+    async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+      const response = await fetch(url, options);
+      const data = (await response.json()) as { message?: string } & T;
+      if (!response.ok) {
+        throw new Error(data.message || "Request gagal");
+      }
+      return data;
+    }
+
+    function formatDate(value: number | null) {
+      if (!value) {
+        return "-";
+      }
+      return new Date(value).toLocaleString("id-ID");
+    }
+
+    function renderPlayers(players: PlayerItem[]) {
+      if (!(playersTableBody instanceof HTMLElement)) {
+        return;
+      }
+
+      playersTableBody.innerHTML = "";
+      if (!players.length) {
+        playersTableBody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-[#666666]">Belum ada data player.</td></tr>';
+        return;
+      }
+
+      for (const player of players) {
+        const row = document.createElement("tr");
+        row.className = "text-[#F5F5F5]";
+
+        row.innerHTML = `
+          <td class="px-4 py-3">${player.name}</td>
+          <td class="px-4 py-3">${player.online ? "Online" : "Offline"}</td>
+          <td class="px-4 py-3">${player.totalDurationHours}</td>
+          <td class="px-4 py-3">${player.totalDurationMinutes}</td>
+          <td class="px-4 py-3">${formatDate(player.lastSeenMs)}</td>
+        `;
+
+        playersTableBody.appendChild(row);
+      }
+    }
+
+    async function loadPlayers() {
+      const data = await api<{ players: PlayerItem[] }>("/api/players");
+      renderPlayers(data.players);
+    }
+
+    document.getElementById("refresh-players")?.addEventListener("click", async () => {
+      try {
+        showFeedback("Memuat data players...");
+        await loadPlayers();
+        showFeedback("Data players diperbarui.", "success");
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    loadPlayers().catch((error) => {
+      showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+    });
+  </script>
+</DashboardShell>

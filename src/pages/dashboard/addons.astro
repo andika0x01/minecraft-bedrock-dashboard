@@ -1,0 +1,528 @@
+---
+import DashboardShell from "../../components/DashboardShell.astro";
+---
+
+<DashboardShell title="Kelola Addon | Bedrock Dashboard" activePath="/dashboard/addons">
+  <section class="space-y-6">
+    <div id="feedback" class="hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm"></div>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h2 class="text-lg font-semibold text-[#FFFFFF]">Upload Addon</h2>
+      <p class="mt-1 text-sm text-[#A0A0A0]">Format yang didukung: .mcpack, .mcaddon</p>
+
+      <form id="pack-upload-form" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input
+          id="pack-file"
+          type="file"
+          accept=".mcpack,.mcaddon"
+          class="w-full min-w-0 flex-1 rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-3 text-sm text-[#A0A0A0] file:mr-3 file:rounded-lg file:border-0 file:bg-[#2A2A2A] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#F5F5F5]"
+        />
+        <button
+          type="submit"
+          class="h-12 shrink-0 whitespace-nowrap rounded-xl bg-[#F5F0E8] px-5 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0] sm:min-w-[9.5rem]"
+          >Upload Addon</button
+        >
+      </form>
+    </article>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h3 class="text-sm font-semibold text-[#F5F5F5]">Resource Pack</h3>
+      <div class="mt-3 overflow-x-auto rounded-xl border border-[#2A2A2A]">
+        <table class="min-w-full divide-y divide-[#2A2A2A] text-left text-sm">
+          <thead class="bg-[#111111] text-[#A0A0A0]">
+            <tr>
+              <th class="px-4 py-3">Nama</th>
+              <th class="px-4 py-3">Versi</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="resource-pack-table" class="divide-y divide-[#2A2A2A] bg-[#0A0A0A]"></tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h3 class="text-sm font-semibold text-[#F5F5F5]">Behavior Pack</h3>
+      <div class="mt-3 overflow-x-auto rounded-xl border border-[#2A2A2A]">
+        <table class="min-w-full divide-y divide-[#2A2A2A] text-left text-sm">
+          <thead class="bg-[#111111] text-[#A0A0A0]">
+            <tr>
+              <th class="px-4 py-3">Nama</th>
+              <th class="px-4 py-3">Versi</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="behavior-pack-table" class="divide-y divide-[#2A2A2A] bg-[#0A0A0A]"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <div id="pack-settings-modal" class="fixed inset-0 z-50 hidden items-end justify-center bg-[#0A0A0A]/80 p-0 sm:items-center sm:p-4">
+    <div class="h-[92vh] w-full rounded-t-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-4 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl sm:p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 id="pack-settings-title" class="text-base font-semibold text-[#FFFFFF]">Settings Addon</h3>
+          <p class="mt-1 text-xs text-[#A0A0A0]">Edit JSON settings addon lalu simpan.</p>
+        </div>
+        <button
+          id="pack-settings-close"
+          type="button"
+          class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1.5 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Tutup</button
+        >
+      </div>
+
+      <p id="pack-settings-error" class="mt-3 hidden rounded-lg border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-xs text-[#ff9e9e]"></p>
+
+      <div id="pack-settings-editor" class="mt-3 h-[64vh] w-full overflow-hidden rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] text-xs leading-6 text-[#F5F5F5] sm:h-[56vh]">
+      </div>
+
+      <div class="mt-3 flex flex-wrap justify-end gap-2">
+        <button
+          id="pack-settings-format"
+          type="button"
+          class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-2 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Format JSON</button
+        >
+        <button
+          id="pack-settings-cancel"
+          type="button"
+          class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-2 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Batal</button
+        >
+        <button id="pack-settings-save" type="button" class="rounded-lg bg-[#F5F0E8] px-3 py-2 text-xs font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import { basicSetup } from "codemirror";
+    import { EditorState } from "@codemirror/state";
+    import { indentWithTab } from "@codemirror/commands";
+    import { json } from "@codemirror/lang-json";
+    import { EditorView, keymap } from "@codemirror/view";
+
+    const feedback = document.getElementById("feedback");
+    const resourcePackTable = document.getElementById("resource-pack-table");
+    const behaviorPackTable = document.getElementById("behavior-pack-table");
+    const packSettingsModal = document.getElementById("pack-settings-modal");
+    const packSettingsTitle = document.getElementById("pack-settings-title");
+    const packSettingsEditor = document.getElementById("pack-settings-editor");
+    const packSettingsError = document.getElementById("pack-settings-error");
+    const packSettingsSave = document.getElementById("pack-settings-save");
+    const packSettingsFormat = document.getElementById("pack-settings-format");
+    const packSettingsCancel = document.getElementById("pack-settings-cancel");
+    const packSettingsClose = document.getElementById("pack-settings-close");
+
+    type FeedbackType = "info" | "success" | "error";
+    type PackType = "resource" | "behavior";
+    type SchemaValidation = { errors: string[]; warnings: string[] };
+    type PackItem = {
+      id: string;
+      name: string;
+      version: string;
+      type: PackType;
+      folder: string;
+      enabled: boolean;
+    };
+
+    let editingPackType: PackType | "" = "";
+    let editingPackId = "";
+    let savingPackSettings = false;
+    let packEditorView: EditorView | null = null;
+
+    const packEditorTheme = EditorView.theme({
+      "&": { height: "100%", backgroundColor: "#0A0A0A", color: "#F5F5F5" },
+      ".cm-scroller": { overflow: "auto", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" },
+      ".cm-gutters": { backgroundColor: "#111111", color: "#666666", borderRight: "1px solid #2A2A2A" },
+      ".cm-activeLineGutter": { backgroundColor: "#1A1A1A", color: "#A0A0A0" },
+      ".cm-activeLine": { backgroundColor: "#111111" },
+      ".cm-content": { caretColor: "#F5F0E8", padding: "12px" },
+      ".cm-cursor": { borderLeftColor: "#F5F0E8" },
+      ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": { backgroundColor: "#2A2A2A" },
+      ".cm-line": { lineHeight: "1.6" },
+    });
+
+    function showFeedback(message: string, type: FeedbackType = "info") {
+      if (!(feedback instanceof HTMLElement)) {
+        return;
+      }
+      feedback.classList.remove("hidden", "text-[#A0A0A0]", "text-[#ff9e9e]", "text-[#F5F0E8]");
+      feedback.classList.add(type === "error" ? "text-[#ff9e9e]" : type === "success" ? "text-[#F5F0E8]" : "text-[#A0A0A0]");
+      feedback.textContent = message;
+    }
+
+    async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+      const response = await fetch(url, options);
+      const data = (await response.json()) as { message?: string } & T;
+      if (!response.ok) {
+        throw new Error(data.message || "Request gagal");
+      }
+      return data;
+    }
+
+    function ensurePackEditor() {
+      if (packEditorView || !(packSettingsEditor instanceof HTMLElement)) {
+        return;
+      }
+
+      packEditorView = new EditorView({
+        state: EditorState.create({
+          doc: "{}",
+          extensions: [basicSetup, json(), keymap.of([indentWithTab]), packEditorTheme],
+        }),
+        parent: packSettingsEditor,
+      });
+    }
+
+    function setPackEditorValue(value: string) {
+      if (!packEditorView) {
+        return;
+      }
+      packEditorView.dispatch({
+        changes: { from: 0, to: packEditorView.state.doc.length, insert: value },
+      });
+    }
+
+    function getPackEditorValue() {
+      if (!packEditorView) {
+        return "";
+      }
+      return packEditorView.state.doc.toString();
+    }
+
+    function validatePackSettingsSchema(type: PackType, value: unknown): SchemaValidation {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        errors.push("Root JSON harus berupa object, bukan array atau primitive.");
+        return { errors, warnings };
+      }
+
+      const obj = value as Record<string, unknown>;
+
+      if (obj.enabled !== undefined && typeof obj.enabled !== "boolean") {
+        errors.push("enabled harus boolean (true/false).");
+      }
+
+      if (obj.priority !== undefined) {
+        const valueNumber = Number(obj.priority);
+        if (!Number.isInteger(valueNumber) || valueNumber < 0 || valueNumber > 9999) {
+          errors.push("priority harus integer antara 0 sampai 9999.");
+        }
+      }
+
+      if (obj.loadOnStart !== undefined && typeof obj.loadOnStart !== "boolean") {
+        errors.push("loadOnStart harus boolean (true/false).");
+      }
+
+      if (obj.namespace !== undefined && typeof obj.namespace !== "string") {
+        errors.push("namespace harus string.");
+      }
+
+      if (obj.config !== undefined && (!obj.config || typeof obj.config !== "object" || Array.isArray(obj.config))) {
+        errors.push("config harus object.");
+      }
+
+      if (type === "behavior") {
+        if (obj.scriptsEnabled !== undefined && typeof obj.scriptsEnabled !== "boolean") {
+          errors.push("scriptsEnabled harus boolean untuk behavior pack.");
+        }
+        if (obj.experimental !== undefined && typeof obj.experimental !== "boolean") {
+          errors.push("experimental harus boolean untuk behavior pack.");
+        }
+      }
+
+      if (type === "resource") {
+        if (obj.forcedClients !== undefined && typeof obj.forcedClients !== "boolean") {
+          errors.push("forcedClients harus boolean untuk resource pack.");
+        }
+        if (obj.textureQuality !== undefined && !["low", "medium", "high", "ultra"].includes(String(obj.textureQuality))) {
+          errors.push("textureQuality harus salah satu: low, medium, high, ultra.");
+        }
+      }
+
+      if (!Object.keys(obj).length) {
+        warnings.push("Settings addon masih kosong.");
+      }
+
+      return { errors, warnings };
+    }
+
+    async function togglePack(type: PackType, pack: PackItem, enabled: boolean) {
+      await api<{ ok: boolean }>("/api/packs/toggle", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type,
+          packId: pack.id,
+          version: pack.version,
+          enabled,
+        }),
+      });
+    }
+
+    async function deletePack(type: PackType, pack: PackItem) {
+      await api<{ ok: boolean }>("/api/packs/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type, packId: pack.id }),
+      });
+    }
+
+    async function openSettings(type: PackType, pack: PackItem) {
+      const current = await api<{ settings: unknown }>(`/api/packs/settings?type=${encodeURIComponent(type)}&packId=${encodeURIComponent(pack.id)}`);
+      if (!(packSettingsModal instanceof HTMLElement) || !(packSettingsEditor instanceof HTMLElement) || !(packSettingsTitle instanceof HTMLElement)) {
+        return;
+      }
+
+      ensurePackEditor();
+      editingPackType = type;
+      editingPackId = pack.id;
+      packSettingsTitle.textContent = `Settings Addon: ${pack.name}`;
+      setPackEditorValue(JSON.stringify(current.settings, null, 2));
+      packSettingsModal.classList.remove("hidden");
+      packSettingsModal.classList.add("flex");
+      packEditorView?.focus();
+      hidePackSettingsError();
+    }
+
+    function hidePackSettingsEditor() {
+      if (!(packSettingsModal instanceof HTMLElement)) {
+        return;
+      }
+      packSettingsModal.classList.add("hidden");
+      packSettingsModal.classList.remove("flex");
+      editingPackType = "";
+      editingPackId = "";
+      hidePackSettingsError();
+    }
+
+    function showPackSettingsError(message: string) {
+      if (!(packSettingsError instanceof HTMLElement)) {
+        return;
+      }
+      packSettingsError.textContent = message;
+      packSettingsError.classList.remove("hidden");
+    }
+
+    function hidePackSettingsError() {
+      if (!(packSettingsError instanceof HTMLElement)) {
+        return;
+      }
+      packSettingsError.textContent = "";
+      packSettingsError.classList.add("hidden");
+    }
+
+    async function savePackSettings() {
+      if (savingPackSettings) {
+        return;
+      }
+      if (!editingPackType || !editingPackId || !(packSettingsSave instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(getPackEditorValue());
+      } catch {
+        showPackSettingsError("JSON tidak valid. Periksa kembali formatnya.");
+        return;
+      }
+
+      const validation = validatePackSettingsSchema(editingPackType, parsed);
+      if (validation.errors.length > 0) {
+        showPackSettingsError(validation.errors.join("\n"));
+        return;
+      }
+      if (validation.warnings.length > 0) {
+        showFeedback(validation.warnings.join(" "), "info");
+      }
+
+      try {
+        savingPackSettings = true;
+        packSettingsSave.disabled = true;
+        packSettingsSave.textContent = "Menyimpan...";
+        hidePackSettingsError();
+        await api<{ ok: boolean }>("/api/packs/settings", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: editingPackType, packId: editingPackId, settings: parsed }),
+        });
+        hidePackSettingsEditor();
+      } finally {
+        savingPackSettings = false;
+        packSettingsSave.disabled = false;
+        packSettingsSave.textContent = "Simpan";
+      }
+    }
+
+    function formatPackSettingsJson() {
+      if (!packEditorView) {
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(getPackEditorValue());
+        setPackEditorValue(JSON.stringify(parsed, null, 2));
+        hidePackSettingsError();
+      } catch {
+        showPackSettingsError("JSON tidak valid. Tidak bisa diformat.");
+      }
+    }
+
+    function renderRows(target: HTMLElement, packs: PackItem[], type: PackType) {
+      target.innerHTML = "";
+
+      if (!packs.length) {
+        target.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-[#666666]">Belum ada addon.</td></tr>';
+        return;
+      }
+
+      for (const pack of packs) {
+        const row = document.createElement("tr");
+        row.className = "text-[#F5F5F5]";
+
+        const statusText = pack.enabled ? "ON" : "OFF";
+        const toggleText = pack.enabled ? "OFF" : "ON";
+        const toggleClass = pack.enabled
+          ? "rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]"
+          : "rounded-lg bg-[#F5F0E8] px-3 py-1 text-xs font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]";
+
+        const settingsButton = `<button data-action="settings" class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Settings</button>`;
+
+        row.innerHTML = `
+          <td class="px-4 py-3">${pack.name}</td>
+          <td class="px-4 py-3">${pack.version}</td>
+          <td class="px-4 py-3">${statusText}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <button data-action="toggle" class="${toggleClass}">${toggleText}</button>
+              ${settingsButton}
+              <button data-action="delete" class="rounded-lg border border-[#444444] bg-[#2A2A2A] px-3 py-1 text-xs font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Hapus</button>
+            </div>
+          </td>
+        `;
+
+        row.querySelector('[data-action="toggle"]')?.addEventListener("click", async () => {
+          try {
+            showFeedback("Mengubah status addon...");
+            await togglePack(type, pack, !pack.enabled);
+            await loadPacks();
+            showFeedback("Status addon berhasil diubah.", "success");
+          } catch (error) {
+            showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+          }
+        });
+
+        row.querySelector('[data-action="delete"]')?.addEventListener("click", async () => {
+          if (!window.confirm(`Hapus addon ${pack.name}?`)) {
+            return;
+          }
+          try {
+            showFeedback("Menghapus addon...");
+            await deletePack(type, pack);
+            await loadPacks();
+            showFeedback("Addon berhasil dihapus.", "success");
+          } catch (error) {
+            showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+          }
+        });
+
+        row.querySelector('[data-action="settings"]')?.addEventListener("click", async () => {
+          try {
+            showFeedback("Membuka settings addon...");
+            await openSettings(type, pack);
+            showFeedback("Editor settings addon dibuka.", "success");
+          } catch (error) {
+            showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+          }
+        });
+
+        target.appendChild(row);
+      }
+    }
+
+    async function loadPacks() {
+      const data = await api<{ resource: PackItem[]; behavior: PackItem[] }>("/api/packs");
+      if (resourcePackTable instanceof HTMLElement) {
+        renderRows(resourcePackTable, data.resource, "resource");
+      }
+      if (behaviorPackTable instanceof HTMLElement) {
+        renderRows(behaviorPackTable, data.behavior, "behavior");
+      }
+    }
+
+    document.getElementById("pack-upload-form")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("pack-file");
+      if (!(input instanceof HTMLInputElement) || !input.files || !input.files[0]) {
+        showFeedback("Pilih file .mcpack atau .mcaddon terlebih dahulu.", "error");
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", input.files[0]);
+
+      try {
+        showFeedback("Mengupload addon...");
+        await api<{ ok: boolean }>("/api/packs", {
+          method: "POST",
+          body: form,
+        });
+        input.value = "";
+        await loadPacks();
+        showFeedback("Upload addon berhasil.", "success");
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    packSettingsSave?.addEventListener("click", async () => {
+      try {
+        showFeedback("Menyimpan settings addon...");
+        await savePackSettings();
+        if (!editingPackId) {
+          showFeedback("Settings addon berhasil disimpan.", "success");
+        }
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    packSettingsFormat?.addEventListener("click", () => {
+      formatPackSettingsJson();
+    });
+
+    packSettingsCancel?.addEventListener("click", () => {
+      hidePackSettingsEditor();
+    });
+
+    packSettingsClose?.addEventListener("click", () => {
+      hidePackSettingsEditor();
+    });
+
+    packSettingsModal?.addEventListener("click", (event) => {
+      if (event.target === packSettingsModal) {
+        hidePackSettingsEditor();
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && packSettingsModal instanceof HTMLElement && !packSettingsModal.classList.contains("hidden")) {
+        hidePackSettingsEditor();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        if (packSettingsModal instanceof HTMLElement && !packSettingsModal.classList.contains("hidden")) {
+          event.preventDefault();
+          packSettingsSave instanceof HTMLElement && packSettingsSave.click();
+        }
+      }
+    });
+
+    loadPacks().catch((error) => {
+      showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+    });
+  </script>
+</DashboardShell>

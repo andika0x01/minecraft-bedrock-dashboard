@@ -1,0 +1,27 @@
+---
+import "../styles/global.css";
+
+type Props = {
+  title?: string;
+};
+
+const { title = "Minecraft Bedrock Dashboard" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <title>{title}</title>
+  </head>
+  <body class="min-h-screen bg-[#0A0A0A] text-[#FFFFFF]" style="font-family: 'Space Grotesk', sans-serif;">
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,253 @@
+---
+import DashboardShell from "../../components/DashboardShell.astro";
+---
+
+<DashboardShell title="Kontrol Server | Bedrock Dashboard" activePath="/dashboard/server">
+  <section class="space-y-6">
+    <div id="feedback" class="hidden rounded-xl border border-[#2A2A2A] bg-[#1A1A1A] px-4 py-3 text-sm"></div>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h2 class="text-lg font-semibold text-[#FFFFFF]">Resource Host</h2>
+      <p class="mt-1 text-sm text-[#A0A0A0]">Pemantauan realtime CPU, RAM, dan Storage server host.</p>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] p-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#666666]">CPU</p>
+          <p id="cpu-value" class="mt-2 text-2xl font-semibold text-[#FFFFFF]">0%</p>
+          <p id="cpu-sub" class="mt-1 text-xs text-[#A0A0A0]">Penggunaan saat ini</p>
+        </div>
+
+        <div class="rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] p-4">
+          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#666666]">RAM</p>
+          <p id="ram-value" class="mt-2 text-2xl font-semibold text-[#FFFFFF]">0%</p>
+          <p id="ram-sub" class="mt-1 text-xs text-[#A0A0A0]">0 B / 0 B</p>
+        </div>
+
+        <div class="rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] p-4 sm:col-span-2 lg:col-span-1">
+          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[#666666]">Storage</p>
+          <p id="storage-value" class="mt-2 text-2xl font-semibold text-[#FFFFFF]">0%</p>
+          <p id="storage-sub" class="mt-1 text-xs text-[#A0A0A0]">0 B / 0 B</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h2 class="text-lg font-semibold text-[#FFFFFF]">Kontrol Server</h2>
+      <p class="mt-1 text-sm text-[#A0A0A0]">Gunakan tombol di bawah untuk Start, Stop, atau Restart server.</p>
+
+      <div class="mt-4 flex flex-wrap gap-3">
+        <button data-action="start" class="control-btn rounded-xl bg-[#F5F0E8] px-4 py-2 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#E8E0D0]">Start</button>
+        <button data-action="stop" class="control-btn rounded-xl border border-[#444444] bg-[#2A2A2A] px-4 py-2 text-sm font-semibold text-[#F5F5F5] transition hover:bg-[#444444]"
+          >Stop</button
+        >
+        <button
+          data-action="restart"
+          class="control-btn rounded-xl border border-[#444444] bg-[#2A2A2A] px-4 py-2 text-sm font-semibold text-[#F5F5F5] transition hover:bg-[#444444]">Restart</button
+        >
+      </div>
+
+      <form id="command-form" class="mt-5 flex flex-col gap-3 sm:flex-row">
+        <input
+          id="command-input"
+          name="command"
+          type="text"
+          placeholder="Contoh: say Server maintenance 5 menit"
+          class="w-full rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] px-4 py-3 text-sm text-[#FFFFFF] outline-none transition focus:border-[#F5F0E8]"
+        />
+        <button type="submit" class="rounded-xl border border-[#2A2A2A] bg-[#2A2A2A] px-4 py-3 text-sm font-semibold text-[#F5F5F5] transition hover:bg-[#444444]"
+          >Kirim Command</button
+        >
+      </form>
+    </article>
+
+    <article class="rounded-2xl border border-[#2A2A2A] bg-[#1A1A1A] p-5 sm:p-6">
+      <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-[#666666]">Log Server</h3>
+      <pre id="server-logs" class="mt-3 max-h-[420px] overflow-auto rounded-xl border border-[#2A2A2A] bg-[#0A0A0A] p-3 text-xs text-[#A0A0A0]"></pre>
+    </article>
+  </section>
+
+  <script>
+    const feedback = document.getElementById("feedback");
+    const serverLogs = document.getElementById("server-logs");
+    const cpuValue = document.getElementById("cpu-value");
+    const cpuSub = document.getElementById("cpu-sub");
+    const ramValue = document.getElementById("ram-value");
+    const ramSub = document.getElementById("ram-sub");
+    const storageValue = document.getElementById("storage-value");
+    const storageSub = document.getElementById("storage-sub");
+
+    type FeedbackType = "info" | "success" | "error";
+    type StatusResponse = {
+      status: {
+        running: boolean;
+        pid: number | null;
+        startedAt: number | null;
+        uptimeMs: number;
+        lastError: string | null;
+      };
+      metrics: {
+        cpuPercent: number;
+        memory: {
+          totalBytes: number;
+          usedBytes: number;
+          freeBytes: number;
+          usedPercent: number;
+        };
+        storage: {
+          path: string;
+          totalBytes: number;
+          usedBytes: number;
+          freeBytes: number;
+          usedPercent: number;
+        };
+        sampledAt: number;
+      };
+    };
+
+    function showFeedback(message: string, type: FeedbackType = "info") {
+      if (!(feedback instanceof HTMLElement)) {
+        return;
+      }
+      feedback.classList.remove("hidden", "text-[#A0A0A0]", "text-[#ff9e9e]", "text-[#F5F0E8]");
+      feedback.classList.add(type === "error" ? "text-[#ff9e9e]" : type === "success" ? "text-[#F5F0E8]" : "text-[#A0A0A0]");
+      feedback.textContent = message;
+    }
+
+    async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+      const response = await fetch(url, options);
+      const data = (await response.json()) as { message?: string } & T;
+      if (!response.ok) {
+        throw new Error(data.message || "Request gagal");
+      }
+      return data;
+    }
+
+    function formatBytes(bytes: number) {
+      if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 B";
+      }
+
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let value = bytes;
+      let unitIndex = 0;
+
+      while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+      }
+
+      const precision = unitIndex === 0 ? 0 : unitIndex === 1 ? 1 : 2;
+      return `${value.toFixed(precision)} ${units[unitIndex]}`;
+    }
+
+    function formatPercent(value: number) {
+      if (!Number.isFinite(value)) {
+        return "0.0%";
+      }
+      return `${Math.min(100, Math.max(0, value)).toFixed(1)}%`;
+    }
+
+    async function loadSystemStats() {
+      const data = await api<StatusResponse>("/api/server/status");
+
+      if (cpuValue instanceof HTMLElement) {
+        cpuValue.textContent = formatPercent(data.metrics.cpuPercent);
+      }
+      if (cpuSub instanceof HTMLElement) {
+        cpuSub.textContent = data.status.running ? "Server aktif" : "Server berhenti";
+      }
+
+      if (ramValue instanceof HTMLElement) {
+        ramValue.textContent = formatPercent(data.metrics.memory.usedPercent);
+      }
+      if (ramSub instanceof HTMLElement) {
+        ramSub.textContent = `${formatBytes(data.metrics.memory.usedBytes)} / ${formatBytes(data.metrics.memory.totalBytes)}`;
+      }
+
+      if (storageValue instanceof HTMLElement) {
+        storageValue.textContent = formatPercent(data.metrics.storage.usedPercent);
+      }
+      if (storageSub instanceof HTMLElement) {
+        storageSub.textContent = `${formatBytes(data.metrics.storage.usedBytes)} / ${formatBytes(data.metrics.storage.totalBytes)}`;
+      }
+    }
+
+    async function loadServerLogs() {
+      const data = await api<{ logs: string[] }>("/api/server/logs?limit=200");
+      if (serverLogs instanceof HTMLElement) {
+        serverLogs.textContent = data.logs.join("\n");
+      }
+    }
+
+    document.querySelectorAll(".control-btn").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const action = button.getAttribute("data-action");
+        if (!action) {
+          return;
+        }
+
+        if ((action === "stop" || action === "restart") && !window.confirm(`Yakin ingin ${action} server?`)) {
+          return;
+        }
+
+        try {
+          showFeedback(`Menjalankan aksi ${action}...`);
+          await api("/api/server/control", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action }),
+          });
+          await loadSystemStats();
+          await loadServerLogs();
+          showFeedback(`Aksi ${action} berhasil dijalankan.`, "success");
+        } catch (error) {
+          showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+        }
+      });
+    });
+
+    document.getElementById("command-form")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("command-input");
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+
+      const command = input.value.trim();
+      if (!command) {
+        return;
+      }
+
+      try {
+        showFeedback("Mengirim command ke server...");
+        await api("/api/server/control", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "command", command }),
+        });
+        input.value = "";
+        await loadSystemStats();
+        await loadServerLogs();
+        showFeedback("Command berhasil dikirim.", "success");
+      } catch (error) {
+        showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+      }
+    });
+
+    loadSystemStats().catch((error) => {
+      showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+    });
+
+    loadServerLogs().catch((error) => {
+      showFeedback(error instanceof Error ? error.message : "Request gagal", "error");
+    });
+
+    setInterval(() => {
+      loadSystemStats().catch(() => {});
+    }, 3000);
+
+    setInterval(() => {
+      loadServerLogs().catch(() => {});
+    }, 5000);
+  </script>
+</DashboardShell>
