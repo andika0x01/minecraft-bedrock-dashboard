@@ -13,6 +13,7 @@ type PlayerRow = {
 
 const dbPath = path.join(ROOT_DIR, "data", "dashboard.sqlite");
 const logPath = path.join(BEDROCK_DIR, "Dedicated_Server.txt");
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new DatabaseSync(dbPath);
 
 db.exec(`
