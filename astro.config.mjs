@@ -9,6 +9,10 @@ import node from "@astrojs/node";
 export default defineConfig({
   output: "server",
 
+  security: {
+    checkOrigin: false,
+  },
+
   vite: {
     plugins: [tailwindcss()],
   },
