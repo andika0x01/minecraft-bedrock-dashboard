@@ -29,6 +29,8 @@ type ManifestInfo = {
   type: PackType;
 };
 
+type JsonRecord = Record<string, unknown>;
+
 function sanitizeName(value: string) {
   return value
     .trim()
@@ -78,8 +80,12 @@ async function readManifestFromFolder(folderPath: string) {
   return readManifestInfo(raw);
 }
 
-async function findBehaviorSettingsFile(folderPath: string) {
-  const candidates = ["settings.json", "behavior_settings.json", "server_settings.json"];
+async function findPackSettingsFile(type: PackType, folderPath: string) {
+  const candidates =
+    type === "behavior"
+      ? ["settings.json", "behavior_settings.json", "server_settings.json"]
+      : ["settings.json", "resource_settings.json", "client_settings.json"];
+
   for (const fileName of candidates) {
     const target = path.join(folderPath, fileName);
     if (await exists(target)) {
@@ -108,8 +114,67 @@ function getFallbackPackSettingsPath(folderPath: string) {
   return path.join(folderPath, "dashboard.settings.json");
 }
 
-async function findNativeBehaviorSettingsFile(folderPath: string) {
-  return await findBehaviorSettingsFile(folderPath);
+async function findNativePackSettingsFile(type: PackType, folderPath: string) {
+  return await findPackSettingsFile(type, folderPath);
+}
+
+function isPlainObject(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseBooleanFlag(value: string | undefined, fallback: boolean) {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+  return fallback;
+}
+
+function parseIntegerInRange(value: string | undefined, fallback: number, min: number, max: number) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(max, numeric));
+}
+
+async function buildDefaultWorldSettings() {
+  const serverSettings = await readServerSettings();
+  return {
+    difficulty: serverSettings.difficulty || "normal",
+    gameMode: serverSettings.gamemode || "survival",
+    maxPlayers: parseIntegerInRange(serverSettings["max-players"], 10, 1, 200),
+    allowCheats: parseBooleanFlag(serverSettings["allow-cheats"], false),
+    pvp: true,
+    keepInventory: false,
+    enableNether: true,
+    friendlyFire: true,
+    seed: serverSettings["level-seed"] || "",
+    motd: serverSettings["server-name"] || "",
+    spawnProtection: 0,
+    autosaveIntervalSeconds: 300,
+  };
+}
+
+function buildDefaultPackSettings(type: PackType): JsonRecord {
+  if (type === "behavior") {
+    return {
+      enabled: true,
+      scriptsEnabled: false,
+      experimental: false,
+      config: {},
+    };
+  }
+
+  return {
+    enabled: true,
+    forcedClients: false,
+    textureQuality: "high",
+    config: {},
+  };
 }
 
 async function readJsonFileOrDefault(filePath: string, fallback: unknown) {
@@ -355,6 +420,7 @@ async function listPackByType(type: PackType): Promise<PackSummary[]> {
     const folderPath = path.join(dir, folder);
     try {
       const info = await readManifestFromFolder(folderPath);
+      const hasNativeSettings = Boolean(await findNativePackSettingsFile(type, folderPath));
       packs.push({
         id: info.uuid,
         name: info.name,
@@ -362,7 +428,7 @@ async function listPackByType(type: PackType): Promise<PackSummary[]> {
         type,
         folder,
         enabled: enabledMap.has(info.uuid),
-        hasSettings: true,
+        hasSettings: hasNativeSettings,
       });
     } catch {
       continue;
@@ -445,15 +511,23 @@ export async function readPackSettings(type: PackType, packId: string) {
     throw new Error("Addon tidak ditemukan.");
   }
 
-  const nativeBehaviorSettings = type === "behavior" ? await findNativeBehaviorSettingsFile(found.folderPath) : null;
-  const settingsPath = nativeBehaviorSettings ?? getFallbackPackSettingsPath(found.folderPath);
-  const settings = await readJsonFileOrDefault(settingsPath, {});
+  const nativeSettingsPath = await findNativePackSettingsFile(type, found.folderPath);
+  const settingsPath = nativeSettingsPath ?? getFallbackPackSettingsPath(found.folderPath);
+  const settingsExists = await exists(settingsPath);
+  const settingsRaw = await readJsonFileOrDefault(settingsPath, null);
+  const defaults = buildDefaultPackSettings(type);
+  const settings = isPlainObject(settingsRaw) ? { ...defaults, ...settingsRaw } : { ...defaults };
+
+  if (!nativeSettingsPath && (!settingsExists || !isPlainObject(settingsRaw) || JSON.stringify(settingsRaw) !== JSON.stringify(settings))) {
+    await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+  }
 
   return {
     type,
     packId,
     packName: found.info.name,
     settingsPath,
+    hasNativeSettings: Boolean(nativeSettingsPath),
     settings,
   };
 }
@@ -464,8 +538,8 @@ export async function updatePackSettings(type: PackType, packId: string, setting
     throw new Error("Addon tidak ditemukan.");
   }
 
-  const nativeBehaviorSettings = type === "behavior" ? await findNativeBehaviorSettingsFile(found.folderPath) : null;
-  const settingsPath = nativeBehaviorSettings ?? getFallbackPackSettingsPath(found.folderPath);
+  const nativeSettingsPath = await findNativePackSettingsFile(type, found.folderPath);
+  const settingsPath = nativeSettingsPath ?? getFallbackPackSettingsPath(found.folderPath);
 
   await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
   return await readPackSettings(type, packId);
@@ -478,7 +552,14 @@ export async function readWorldSettings(worldName: string) {
   }
 
   const settingsPath = getWorldSettingsPath(worldName);
-  const settings = await readJsonFileOrDefault(settingsPath, {});
+  const settingsExists = await exists(settingsPath);
+  const settingsRaw = await readJsonFileOrDefault(settingsPath, null);
+  const defaults = await buildDefaultWorldSettings();
+  const settings = isPlainObject(settingsRaw) ? { ...defaults, ...settingsRaw } : defaults;
+
+  if (!settingsExists || !isPlainObject(settingsRaw) || JSON.stringify(settingsRaw) !== JSON.stringify(settings)) {
+    await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+  }
 
   return {
     worldName,
