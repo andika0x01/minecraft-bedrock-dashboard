@@ -14,7 +14,6 @@ type PackSummary = {
   type: PackType;
   folder: string;
   enabled: boolean;
-  hasSettings: boolean;
 };
 
 type WorldSummary = {
@@ -28,8 +27,6 @@ type ManifestInfo = {
   version: string;
   type: PackType;
 };
-
-type JsonRecord = Record<string, unknown>;
 
 function sanitizeName(value: string) {
   return value
@@ -80,112 +77,6 @@ async function readManifestFromFolder(folderPath: string) {
   return readManifestInfo(raw);
 }
 
-async function findPackSettingsFile(type: PackType, folderPath: string) {
-  const candidates =
-    type === "behavior"
-      ? ["settings.json", "behavior_settings.json", "server_settings.json"]
-      : ["settings.json", "resource_settings.json", "client_settings.json"];
-
-  for (const fileName of candidates) {
-    const target = path.join(folderPath, fileName);
-    if (await exists(target)) {
-      return target;
-    }
-  }
-
-  try {
-    const entries = await fs.readdir(folderPath, { withFileTypes: true });
-    const dynamic = entries.find((entry) => entry.isFile() && /settings.*\.json$/i.test(entry.name));
-    if (dynamic) {
-      return path.join(folderPath, dynamic.name);
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
-function getWorldSettingsPath(worldName: string) {
-  return path.join(WORLDS_DIR, worldName, "dashboard.settings.json");
-}
-
-function getFallbackPackSettingsPath(folderPath: string) {
-  return path.join(folderPath, "dashboard.settings.json");
-}
-
-async function findNativePackSettingsFile(type: PackType, folderPath: string) {
-  return await findPackSettingsFile(type, folderPath);
-}
-
-function isPlainObject(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseBooleanFlag(value: string | undefined, fallback: boolean) {
-  const normalized = value?.trim().toLowerCase();
-  if (normalized === "true") {
-    return true;
-  }
-  if (normalized === "false") {
-    return false;
-  }
-  return fallback;
-}
-
-function parseIntegerInRange(value: string | undefined, fallback: number, min: number, max: number) {
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric)) {
-    return fallback;
-  }
-  return Math.max(min, Math.min(max, numeric));
-}
-
-async function buildDefaultWorldSettings() {
-  const serverSettings = await readServerSettings();
-  return {
-    difficulty: serverSettings.difficulty || "normal",
-    gameMode: serverSettings.gamemode || "survival",
-    maxPlayers: parseIntegerInRange(serverSettings["max-players"], 10, 1, 200),
-    allowCheats: parseBooleanFlag(serverSettings["allow-cheats"], false),
-    pvp: true,
-    keepInventory: false,
-    enableNether: true,
-    friendlyFire: true,
-    seed: serverSettings["level-seed"] || "",
-    motd: serverSettings["server-name"] || "",
-    spawnProtection: 0,
-    autosaveIntervalSeconds: 300,
-  };
-}
-
-function buildDefaultPackSettings(type: PackType): JsonRecord {
-  if (type === "behavior") {
-    return {
-      enabled: true,
-      scriptsEnabled: false,
-      experimental: false,
-      config: {},
-    };
-  }
-
-  return {
-    enabled: true,
-    forcedClients: false,
-    textureQuality: "high",
-    config: {},
-  };
-}
-
-async function readJsonFileOrDefault(filePath: string, fallback: unknown) {
-  if (!(await exists(filePath))) {
-    return fallback;
-  }
-
-  const raw = await fs.readFile(filePath, "utf-8");
-  return JSON.parse(raw);
-}
-
 async function exists(targetPath: string) {
   try {
     await fs.access(targetPath);
@@ -205,6 +96,38 @@ async function listDirectories(dirPath: string) {
   }
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+}
+
+function isVanillaSeriesFolder(folder: string) {
+  return /^vanilla(?:_[0-9.]+)?$/i.test(folder);
+}
+
+function isChemistrySeriesFolder(folder: string) {
+  return /^chemistry(?:_[0-9.]+)?$/i.test(folder);
+}
+
+function isDefaultBedrockFolder(type: PackType, folder: string) {
+  const normalized = folder.trim().toLowerCase();
+
+  if (isVanillaSeriesFolder(normalized) || isChemistrySeriesFolder(normalized)) {
+    return true;
+  }
+
+  if (normalized === "editor") {
+    return true;
+  }
+
+  if (type === "behavior") {
+    if (normalized === "server_library" || normalized === "server_ui_library" || normalized === "server_editor_library") {
+      return true;
+    }
+
+    if (normalized.startsWith("experimental_")) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 async function findManifestFolders(rootPath: string, depth = 0): Promise<string[]> {
@@ -417,10 +340,13 @@ async function listPackByType(type: PackType): Promise<PackSummary[]> {
   const packs: PackSummary[] = [];
 
   for (const folder of folders) {
+    if (isDefaultBedrockFolder(type, folder)) {
+      continue;
+    }
+
     const folderPath = path.join(dir, folder);
     try {
       const info = await readManifestFromFolder(folderPath);
-      const hasNativeSettings = Boolean(await findNativePackSettingsFile(type, folderPath));
       packs.push({
         id: info.uuid,
         name: info.name,
@@ -428,7 +354,6 @@ async function listPackByType(type: PackType): Promise<PackSummary[]> {
         type,
         folder,
         enabled: enabledMap.has(info.uuid),
-        hasSettings: hasNativeSettings,
       });
     } catch {
       continue;
@@ -495,89 +420,6 @@ export async function deletePack(type: PackType, packId: string) {
 
   await fs.rm(found.folderPath, { recursive: true, force: true });
   return listPacks();
-}
-
-export async function readBehaviorPackSettings(packId: string) {
-  return await readPackSettings("behavior", packId);
-}
-
-export async function updateBehaviorPackSettings(packId: string, settings: unknown) {
-  return await updatePackSettings("behavior", packId, settings);
-}
-
-export async function readPackSettings(type: PackType, packId: string) {
-  const found = await findPackFolderById(type, packId);
-  if (!found) {
-    throw new Error("Addon tidak ditemukan.");
-  }
-
-  const nativeSettingsPath = await findNativePackSettingsFile(type, found.folderPath);
-  const settingsPath = nativeSettingsPath ?? getFallbackPackSettingsPath(found.folderPath);
-  const settingsExists = await exists(settingsPath);
-  const settingsRaw = await readJsonFileOrDefault(settingsPath, null);
-  const defaults = buildDefaultPackSettings(type);
-  const settings = isPlainObject(settingsRaw) ? { ...defaults, ...settingsRaw } : { ...defaults };
-
-  if (!nativeSettingsPath && (!settingsExists || !isPlainObject(settingsRaw) || JSON.stringify(settingsRaw) !== JSON.stringify(settings))) {
-    await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-  }
-
-  return {
-    type,
-    packId,
-    packName: found.info.name,
-    settingsPath,
-    hasNativeSettings: Boolean(nativeSettingsPath),
-    settings,
-  };
-}
-
-export async function updatePackSettings(type: PackType, packId: string, settings: unknown) {
-  const found = await findPackFolderById(type, packId);
-  if (!found) {
-    throw new Error("Addon tidak ditemukan.");
-  }
-
-  const nativeSettingsPath = await findNativePackSettingsFile(type, found.folderPath);
-  const settingsPath = nativeSettingsPath ?? getFallbackPackSettingsPath(found.folderPath);
-
-  await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-  return await readPackSettings(type, packId);
-}
-
-export async function readWorldSettings(worldName: string) {
-  const worldPath = path.join(WORLDS_DIR, worldName);
-  if (!(await exists(worldPath))) {
-    throw new Error("World tidak ditemukan.");
-  }
-
-  const settingsPath = getWorldSettingsPath(worldName);
-  const settingsExists = await exists(settingsPath);
-  const settingsRaw = await readJsonFileOrDefault(settingsPath, null);
-  const defaults = await buildDefaultWorldSettings();
-  const settings = isPlainObject(settingsRaw) ? { ...defaults, ...settingsRaw } : defaults;
-
-  if (!settingsExists || !isPlainObject(settingsRaw) || JSON.stringify(settingsRaw) !== JSON.stringify(settings)) {
-    await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-  }
-
-  return {
-    worldName,
-    settingsPath,
-    settings,
-  };
-}
-
-export async function updateWorldSettings(worldName: string, settings: unknown) {
-  const worldPath = path.join(WORLDS_DIR, worldName);
-  if (!(await exists(worldPath))) {
-    throw new Error("World tidak ditemukan.");
-  }
-
-  const settingsPath = getWorldSettingsPath(worldName);
-  await fs.writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-
-  return await readWorldSettings(worldName);
 }
 
 export async function uploadPack(file: File) {

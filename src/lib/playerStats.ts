@@ -73,12 +73,8 @@ function normalizePlayerName(name: string) {
   return name.trim().toLowerCase();
 }
 
-function buildPlayerId(playerName: string, rawXuid: string | undefined) {
-  const normalizedXuid = rawXuid?.trim().toLowerCase();
-  if (normalizedXuid && !["0", "unknown", "none", "null", "undefined"].includes(normalizedXuid)) {
-    return `xuid:${normalizedXuid}`;
-  }
-  return `name:${normalizePlayerName(playerName)}`;
+function buildPlayerId(playerName: string) {
+  return normalizePlayerName(playerName);
 }
 
 function parseTimestamp(line: string) {
@@ -101,7 +97,7 @@ function parseEvent(line: string): ParsedEvent | null {
       timestampMs,
       type: "join",
       playerName,
-      playerId: buildPlayerId(playerName, joinXuid[2]),
+      playerId: buildPlayerId(playerName),
     };
   }
 
@@ -112,7 +108,7 @@ function parseEvent(line: string): ParsedEvent | null {
       timestampMs,
       type: "leave",
       playerName,
-      playerId: buildPlayerId(playerName, leaveXuid[2]),
+      playerId: buildPlayerId(playerName),
     };
   }
 
@@ -123,7 +119,7 @@ function parseEvent(line: string): ParsedEvent | null {
       timestampMs,
       type: "join",
       playerName: name,
-      playerId: buildPlayerId(name, undefined),
+      playerId: buildPlayerId(name),
     };
   }
 
@@ -134,7 +130,7 @@ function parseEvent(line: string): ParsedEvent | null {
       timestampMs,
       type: "leave",
       playerName: name,
-      playerId: buildPlayerId(name, undefined),
+      playerId: buildPlayerId(name),
     };
   }
 
@@ -219,7 +215,7 @@ export function ingestPlayerLog() {
     const hasTrailingBreak = /\r?\n$/.test(merged);
     const split = merged.split(/\r?\n/);
     const lines = (hasTrailingBreak ? split : split.slice(0, -1)).filter(Boolean);
-    const nextTail = hasTrailingBreak ? "" : split[split.length - 1] ?? "";
+    const nextTail = hasTrailingBreak ? "" : (split[split.length - 1] ?? "");
 
     for (const line of lines) {
       const event = parseEvent(line);
