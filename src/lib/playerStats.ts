@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { BEDROCK_DIR, ROOT_DIR } from "./paths";
+import { ROOT_DIR } from "./paths";
 
 type PlayerRow = {
   player_id: string;
@@ -12,7 +12,6 @@ type PlayerRow = {
 };
 
 const dbPath = path.join(ROOT_DIR, "data", "dashboard.sqlite");
-const logPath = path.join(BEDROCK_DIR, "Dedicated_Server.txt");
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new DatabaseSync(dbPath);
 
@@ -24,20 +23,6 @@ db.exec(`
     session_start_ms INTEGER,
     last_seen_ms INTEGER
   );
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS app_meta (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
-`);
-
-const readMetaStmt = db.prepare("SELECT value FROM app_meta WHERE key = ?");
-const writeMetaStmt = db.prepare(`
-  INSERT INTO app_meta (key, value)
-  VALUES (?, ?)
-  ON CONFLICT(key) DO UPDATE SET value = excluded.value
 `);
 
 const selectPlayerStmt = db.prepare("SELECT player_id, player_name, total_play_ms, session_start_ms, last_seen_ms FROM players WHERE player_id = ?");
@@ -90,7 +75,7 @@ function parseTimestamp(line: string) {
 function parseEvent(line: string): ParsedEvent | null {
   const timestampMs = parseTimestamp(line);
 
-  const joinXuid = line.match(/Player connected:\s*([^,]+),\s*xuid:\s*([^,\s]+)/i);
+  const joinXuid = line.match(/Player connected:\s*([^,]+?)(?:,\s*|\s+)xuid:\s*([^,\s]+)/i);
   if (joinXuid) {
     const playerName = joinXuid[1].trim();
     return {
@@ -101,7 +86,7 @@ function parseEvent(line: string): ParsedEvent | null {
     };
   }
 
-  const leaveXuid = line.match(/Player disconnected:\s*([^,]+),\s*xuid:\s*([^,\s]+)/i);
+  const leaveXuid = line.match(/Player disconnected:\s*([^,]+?)(?:,\s*|\s+)xuid:\s*([^,\s]+)/i);
   if (leaveXuid) {
     const playerName = leaveXuid[1].trim();
     return {
@@ -137,28 +122,6 @@ function parseEvent(line: string): ParsedEvent | null {
   return null;
 }
 
-function readLastOffset() {
-  const row = readMetaStmt.get("log_offset") as { value: string } | undefined;
-  if (!row) {
-    return 0;
-  }
-  const value = Number(row.value);
-  return Number.isFinite(value) && value >= 0 ? value : 0;
-}
-
-function readLogTail() {
-  const row = readMetaStmt.get("log_tail") as { value: string } | undefined;
-  return row?.value ?? "";
-}
-
-function writeLogTail(value: string) {
-  writeMetaStmt.run("log_tail", value);
-}
-
-function writeOffset(offset: number) {
-  writeMetaStmt.run("log_offset", String(offset));
-}
-
 function ensurePlayer(playerId: string, playerName: string) {
   insertPlayerStmt.run(playerId, playerName);
   const row = selectPlayerStmt.get(playerId) as PlayerRow | undefined;
@@ -182,58 +145,17 @@ function applyEvent(event: ParsedEvent) {
   updateLeaveStmt.run(event.playerName, totalPlay, event.timestampMs, event.playerId);
 }
 
-export function ingestPlayerLog() {
-  if (!fs.existsSync(logPath)) {
-    return;
+export function ingestPlayerLogLine(line: string) {
+  const event = parseEvent(line);
+  if (!event) {
+    return false;
   }
 
-  const stat = fs.statSync(logPath);
-  const fileSize = stat.size;
-  let offset = readLastOffset();
-
-  if (offset > fileSize) {
-    offset = 0;
-    writeLogTail("");
-  }
-
-  if (offset === fileSize) {
-    return;
-  }
-
-  const fd = fs.openSync(logPath, "r");
-  try {
-    const length = fileSize - offset;
-    if (length <= 0) {
-      writeOffset(fileSize);
-      return;
-    }
-
-    const buffer = Buffer.alloc(length);
-    fs.readSync(fd, buffer, 0, length, offset);
-    const chunk = buffer.toString("utf-8");
-    const merged = `${readLogTail()}${chunk}`;
-    const hasTrailingBreak = /\r?\n$/.test(merged);
-    const split = merged.split(/\r?\n/);
-    const lines = (hasTrailingBreak ? split : split.slice(0, -1)).filter(Boolean);
-    const nextTail = hasTrailingBreak ? "" : (split[split.length - 1] ?? "");
-
-    for (const line of lines) {
-      const event = parseEvent(line);
-      if (!event) {
-        continue;
-      }
-      applyEvent(event);
-    }
-
-    writeLogTail(nextTail);
-    writeOffset(fileSize);
-  } finally {
-    fs.closeSync(fd);
-  }
+  applyEvent(event);
+  return true;
 }
 
 export function listPlayersByDuration() {
-  ingestPlayerLog();
   const rows = listPlayersStmt.all() as PlayerRow[];
   return rows.map((row) => {
     const liveDurationMs = row.session_start_ms ? Math.max(0, Date.now() - row.session_start_ms) : 0;

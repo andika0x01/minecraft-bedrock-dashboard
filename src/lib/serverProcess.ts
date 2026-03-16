@@ -1,8 +1,7 @@
 import { execSync, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import { BEDROCK_BINARY, BEDROCK_DIR } from "./paths";
-
-const DEDICATED_LOG_PATH = `${BEDROCK_DIR}/Dedicated_Server.txt`;
+import { ingestPlayerLogLine } from "./playerStats";
 
 type ServerState = {
   process: ChildProcessWithoutNullStreams | null;
@@ -101,9 +100,15 @@ function pushLog(line: string) {
     state.logs.shift();
   }
 
-  try {
-    fs.appendFileSync(DEDICATED_LOG_PATH, `${line}\n`);
-  } catch {}
+  ingestPlayerLogLine(line);
+}
+
+function consumeChunk(buffer: string, chunk: Buffer) {
+  const merged = `${buffer}${chunk.toString("utf-8")}`;
+  const segments = merged.split(/\r?\n/);
+  const nextBuffer = segments.pop() ?? "";
+  const lines = segments.filter(Boolean);
+  return { lines, nextBuffer };
 }
 
 function ensureBinaryExists() {
@@ -135,36 +140,14 @@ export function getServerStatus() {
 export function getServerLogs(limit = 200) {
   const safeLimit = Math.max(1, Math.min(limit, 500));
   const memoryLogs = state.logs.slice(-safeLimit);
-  if (memoryLogs.length >= safeLimit) {
+  if (memoryLogs.length > 0) {
     return memoryLogs;
   }
-
-  try {
-    const raw = fs.readFileSync(DEDICATED_LOG_PATH, "utf-8");
-    const fileLogs = raw.split(/\r?\n/).filter(Boolean);
-    if (memoryLogs.length === 0) {
-      if (fileLogs.length === 0) {
-        const status = getServerStatus();
-        if (status.running && status.lastError) {
-          return [status.lastError];
-        }
-        return ["Belum ada log server. Jalankan server dari dashboard untuk melihat log live."];
-      }
-      return fileLogs.slice(-safeLimit);
-    }
-
-    const merged = [...fileLogs.slice(-safeLimit), ...memoryLogs];
-    return merged.slice(-safeLimit);
-  } catch {
-    if (memoryLogs.length > 0) {
-      return memoryLogs;
-    }
-    const status = getServerStatus();
-    if (status.running && status.lastError) {
-      return [status.lastError];
-    }
-    return ["Belum ada log server. Jalankan server dari dashboard untuk melihat log live."];
+  const status = getServerStatus();
+  if (status.running && status.lastError) {
+    return [status.lastError];
   }
+  return ["Belum ada log server. Jalankan server dari dashboard untuk melihat log live."];
 }
 
 export async function startServer() {
@@ -202,17 +185,22 @@ export async function startServer() {
     throw new Error("Gagal menjalankan bedrock_server. Cek izin file binary dan library server.");
   }
 
+  let stdoutBuffer = "";
+  let stderrBuffer = "";
+
   proc.stdout.on("data", (chunk) => {
-    const text = chunk.toString("utf-8");
-    const lines = text.split(/\r?\n/).filter(Boolean);
+    const parsed = consumeChunk(stdoutBuffer, chunk);
+    stdoutBuffer = parsed.nextBuffer;
+    const lines = parsed.lines;
     for (const line of lines) {
       pushLog(line);
     }
   });
 
   proc.stderr.on("data", (chunk) => {
-    const text = chunk.toString("utf-8");
-    const lines = text.split(/\r?\n/).filter(Boolean);
+    const parsed = consumeChunk(stderrBuffer, chunk);
+    stderrBuffer = parsed.nextBuffer;
+    const lines = parsed.lines;
     for (const line of lines) {
       pushLog(`[ERR] ${line}`);
       state.lastError = line;
@@ -220,6 +208,14 @@ export async function startServer() {
   });
 
   proc.on("exit", (code, signal) => {
+    if (stdoutBuffer.trim()) {
+      pushLog(stdoutBuffer.trim());
+      stdoutBuffer = "";
+    }
+    if (stderrBuffer.trim()) {
+      pushLog(`[ERR] ${stderrBuffer.trim()}`);
+      stderrBuffer = "";
+    }
     pushLog(`Server berhenti (code=${code ?? "null"}, signal=${signal ?? "null"})`);
     state.process = null;
     state.startedAt = null;
